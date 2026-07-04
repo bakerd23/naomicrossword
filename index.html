@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crossword</title>
+  <style>
+    :root {
+      --cell: clamp(24px, 3.2vw, 38px);
+      --line: #2a2a2a;
+      --black: #050505;
+      --correct: #d9f7df;
+      --wrong: #ffd9d9;
+      --active: #fff4b8;
+      --message: #fff0b3;
+      --bg: #f7f7f1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: #141414;
+      padding: 18px;
+    }
+    .wrap { max-width: 1500px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: clamp(28px, 4vw, 44px); }
+    .intro { margin: 0 0 12px; line-height: 1.35; font-size: 16px; }
+    .statusbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin: 0 0 14px;
+    }
+    .status, .direction {
+      display: inline-block;
+      padding: 8px 11px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      font-weight: 700;
+    }
+    #directionBtn {
+      min-width: 230px;
+      white-space: normal;
+      line-height: 1.2;
+      color: #fff;
+      background: #111;
+      text-align: center;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: max-content minmax(560px, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .gridPanel { max-width: 100%; }
+    .gridScroll { max-width: 100%; overflow-x: auto; padding-bottom: 6px; }
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(16, var(--cell));
+      grid-auto-rows: var(--cell);
+      border: 2px solid var(--line);
+      background: var(--line);
+      gap: 1px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.12);
+      width: max-content;
+      touch-action: manipulation;
+    }
+    .cell {
+      position: relative;
+      background: #fff;
+      width: var(--cell);
+      height: var(--cell);
+    }
+    .cell.black { background: var(--black); }
+    .num {
+      position: absolute;
+      top: 2px;
+      left: 3px;
+      font-size: calc(var(--cell) * .25);
+      line-height: 1;
+      color: #111;
+      z-index: 2;
+      pointer-events: none;
+      font-weight: 700;
+    }
+    .cell input {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      text-align: center;
+      font-size: calc(var(--cell) * .55);
+      text-transform: uppercase;
+      background: transparent;
+      outline: none;
+      font-weight: 700;
+      padding-top: calc(var(--cell) * .16);
+      caret-color: transparent;
+    }
+    .cell.correct { background: var(--correct); }
+    .cell.wrong { background: var(--wrong); }
+    .cell.active { outline: 3px solid #222; outline-offset: -3px; z-index: 4; }
+    .cell.inword { background: var(--active); }
+    .cell.highlighted { background: var(--message) !important; outline: 3px solid #c99a00; z-index: 5; }
+    .clues {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(250px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .cluebox {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+    }
+    .cluebox h2 { margin: 0 0 8px; font-size: 19px; }
+    ol { margin: 0; padding-left: 0; list-style: none; columns: 1; }
+    li {
+      margin: 4px 0;
+      line-height: 1.22;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 5px;
+      padding: 2px 3px;
+    }
+    li:hover { background: #f0f0f0; }
+    li.solved { color: #777; text-decoration: line-through; background: #f4f4f4; }
+    li.current { background: #fff4b8; outline: 2px solid #222; font-weight: 800; }
+    li.current.solved { color: #444; text-decoration: line-through; background: #fff4b8; }
+    .cluenum { font-weight: 800; display: inline-block; min-width: 34px; color: #111; text-decoration: none; }
+    .buttons { margin-top: 10px; display: flex; gap: 9px; flex-wrap: wrap; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      background: #111;
+      color: #fff;
+      padding: 10px 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button.secondary { background: #666; }
+    dialog {
+      border: 0;
+      border-radius: 16px;
+      max-width: 700px;
+      width: calc(100% - 28px);
+      padding: 0;
+      box-shadow: 0 15px 60px rgba(0,0,0,.35);
+      overflow: hidden;
+    }
+    dialog::backdrop { background: rgba(0,0,0,.35); }
+    .modal { padding: 26px; text-align: center; position: relative; overflow: hidden; background: #fff; }
+    .modal h2 { margin: 0 0 8px; font-size: 30px; }
+    .message {
+      font-size: clamp(24px, 4vw, 42px);
+      font-weight: 900;
+      letter-spacing: .4px;
+      padding: 16px;
+      background: #fff3bd;
+      border-radius: 12px;
+      border: 1px solid #e4c55b;
+      text-align: center;
+      margin: 16px 0;
+    }
+    .fireworks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .burst { position: absolute; width: 8px; height: 8px; border-radius: 50%; animation: burst 1.3s ease-out infinite; opacity: 0; }
+    .burst:nth-child(1) { left: 15%; top: 18%; background: #e53935; animation-delay: .0s; }
+    .burst:nth-child(2) { left: 78%; top: 22%; background: #1e88e5; animation-delay: .2s; }
+    .burst:nth-child(3) { left: 30%; top: 72%; background: #fdd835; animation-delay: .45s; }
+    .burst:nth-child(4) { left: 68%; top: 66%; background: #43a047; animation-delay: .65s; }
+    .burst:nth-child(5) { left: 50%; top: 12%; background: #8e24aa; animation-delay: .9s; }
+    @keyframes burst {
+      0% { transform: scale(.2); box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+      70% { transform: scale(1); box-shadow: 0 -45px 0 -1px currentColor, 32px -32px 0 -1px currentColor, 45px 0 0 -1px currentColor, 32px 32px 0 -1px currentColor, 0 45px 0 -1px currentColor, -32px 32px 0 -1px currentColor, -45px 0 0 -1px currentColor, -32px -32px 0 -1px currentColor; opacity: 1; }
+      100% { transform: scale(1.1); opacity: 0; }
+    }
+    @media (max-width: 1020px) {
+      body { padding: 12px; }
+      .layout { grid-template-columns: 1fr; }
+      .clues { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+      #grid { margin: 0 auto; }
+    }
+    @media (max-width: 620px) {
+      :root { --cell: clamp(22px, 6vw, 34px); }
+      .clues { grid-template-columns: 1fr; }
+      li { font-size: 15px; }
+      .statusbar { align-items: stretch; }
+      .status, .direction, button { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Crossword</h1>
+    <p class="intro">Fill in the crossword. Letters turn green when they are correct. Once the full puzzle is correct, a message will appear.</p>
+    <div class="statusbar">
+      <div class="status" id="status">0 / 0 letters correct</div>
+      <button id="directionBtn" class="direction" type="button" aria-label="Space bar: switch direction. Current direction: Across">SPACE BAR: Across</button>
+    </div>
+
+    <div class="layout">
+      <div class="gridPanel">
+        <div class="gridScroll"><div id="grid" aria-label="Crossword grid"></div></div>
+        <div class="buttons">
+          <button id="checkBtn">Check puzzle</button>
+          <button class="secondary" id="clearBtn">Clear</button>
+        </div>
+      </div>
+
+      <div class="clues">
+        <div class="cluebox">
+          <h2>Across</h2>
+          <ol id="acrossClues"></ol>
+        </div>
+        <div class="cluebox">
+          <h2>Down</h2>
+          <ol id="downClues"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="doneDialog">
+    <div class="modal">
+      <div class="fireworks" aria-hidden="true"><span class="burst"></span><span class="burst"></span><span class="burst"></span><span class="burst"></span><span class="burst"></span></div>
+      <h2>Completed</h2>
+      <p>Congratulations. You solved the puzzle.</p>
+      <p class="message">HAPPY FOURTH, YOU'RE A GOOD INFLUENCE.</p>
+      <button id="closeDialog">Close</button>
+    </div>
+  </dialog>
+
+  <script>
+    const rows = [
+      "buffalowildwings",
+      "e#l##e#ar#o#nah#",
+      "apologizes##foot",
+      "cr###s#e#p#elms#",
+      "hokie###ha#suite",
+      "#dam##bb#mt#e##a",
+      "s#tattoo##h#neat",
+      "ta#g#nag#soccer#",
+      "athens##genre#us",
+      "geese#hbo#go##bi",
+      "e#a##reels#ocean",
+      "sorry#r#dunkin#e"
+    ].map(r => r.toUpperCase());
+
+    const entries = [
+      { id:'A1', num:1, dir:'across', answer:'BUFFALOWILDWINGS', r:0, c:0, clue:"Lauren's workplace (7,4,5)" },
+      { id:'A10', num:10, dir:'across', answer:'AR', r:1, c:7, clue:'Postal Arkansas (2)' },
+      { id:'A11', num:11, dir:'across', answer:'NAH', r:1, c:12, clue:'No colloquially (3)' },
+      { id:'A12', num:12, dir:'across', answer:'APOLOGIZES', r:2, c:0, clue:'States they are sorry (10)' },
+      { id:'A15', num:15, dir:'across', answer:'FOOT', r:2, c:12, clue:'The most important soccer extremity (4)' },
+      { id:'A16', num:16, dir:'across', answer:'CR', r:3, c:0, clue:'Postal Costa Rica (2)' },
+      { id:'A17', num:17, dir:'across', answer:'ELMS', r:3, c:11, clue:'Trees, or a pluralized Roanoke street (4)' },
+      { id:'A18', num:18, dir:'across', answer:'HOKIE', r:4, c:0, clue:"The world's best mascot (5)" },
+      { id:'A21', num:21, dir:'across', answer:'HA', r:4, c:8, clue:'An abrupt laugh (2)' },
+      { id:'A22', num:22, dir:'across', answer:'SUITE', r:4, c:11, clue:'A fancy hotel room (5)' },
+      { id:'A24', num:24, dir:'across', answer:'DAM', r:5, c:1, clue:'A water blocker (3)' },
+      { id:'A25', num:25, dir:'across', answer:'BB', r:5, c:6, clue:'A small, round, metal bullet (2)' },
+      { id:'A27', num:27, dir:'across', answer:'MT', r:5, c:9, clue:'Mountain, briefly (2)' },
+      { id:'A31', num:31, dir:'across', answer:'TATTOO', r:6, c:2, clue:'Your favorite kind of body art (6)' },
+      { id:'A32', num:32, dir:'across', answer:'NEAT', r:6, c:12, clue:'Clean and organized (4)' },
+      { id:'A35', num:35, dir:'across', answer:'TA', r:7, c:0, clue:"Professor's helper briefly (2)" },
+      { id:'A37', num:37, dir:'across', answer:'NAG', r:7, c:5, clue:'Bother repeatedly (3)' },
+      { id:'A38', num:38, dir:'across', answer:'SOCCER', r:7, c:9, clue:'Your favorite game (6)' },
+      { id:'A40', num:40, dir:'across', answer:'ATHENS', r:8, c:0, clue:'City of your former workplace (6)' },
+      { id:'A43', num:43, dir:'across', answer:'GENRE', r:8, c:8, clue:'Category of a movie or book (5)' },
+      { id:'A44', num:44, dir:'across', answer:'US', r:8, c:14, clue:'Me and you (2)' },
+      { id:'A46', num:46, dir:'across', answer:'GEESE', r:9, c:0, clue:'A flock of honkers (5)' },
+      { id:'A47', num:47, dir:'across', answer:'HBO', r:9, c:6, clue:'___ Max for streaming (3)' },
+      { id:'A49', num:49, dir:'across', answer:'GO', r:9, c:10, clue:'Opposite of stop (2)' },
+      { id:'A50', num:50, dir:'across', answer:'BI', r:9, c:14, clue:'__sexual or __weekly (2)' },
+      { id:'A51', num:51, dir:'across', answer:'REELS', r:10, c:5, clue:'Short Instagram videos (5)' },
+      { id:'A53', num:53, dir:'across', answer:'OCEAN', r:10, c:11, clue:'Your favorite form of water (5)' },
+      { id:'A56', num:56, dir:'across', answer:'SORRY', r:11, c:0, clue:'A statement of regret (5)' },
+      { id:'A57', num:57, dir:'across', answer:'DUNKIN', r:11, c:8, clue:'A common coffee stop (6)' },
+      { id:'D1', num:1, dir:'down', answer:'BEACH', r:0, c:0, clue:'Your favorite place (5)' },
+      { id:'D2', num:2, dir:'down', answer:'FLO', r:0, c:2, clue:'Progressive commercial mascot (3)' },
+      { id:'D3', num:3, dir:'down', answer:'LEGS', r:0, c:5, clue:'Flowered body parts to stand on (4)' },
+      { id:'D4', num:4, dir:'down', answer:'WAZE', r:0, c:7, clue:'Google Maps alternative (4)' },
+      { id:'D5', num:5, dir:'down', answer:'IRE', r:0, c:8, clue:'Anger (3)' },
+      { id:'D6', num:6, dir:'down', answer:'DO', r:0, c:10, clue:'Perform an action (2)' },
+      { id:'D7', num:7, dir:'down', answer:'INFLUENCE', r:0, c:12, clue:'Impact on someone, and a theme hint (9)' },
+      { id:'D8', num:8, dir:'down', answer:'NAOMI', r:0, c:13, clue:'Your preferred name (5)' },
+      { id:'D9', num:9, dir:'down', answer:'GHOST', r:0, c:14, clue:'Leaving messages unanswered (5)' },
+      { id:'D13', num:13, dir:'down', answer:'PROD', r:2, c:1, clue:'Poke at (4)' },
+      { id:'D14', num:14, dir:'down', answer:'SPAM', r:2, c:9, clue:'Unwanted or repeated messages (4)' },
+      { id:'D17', num:17, dir:'down', answer:'ES', r:3, c:11, clue:'Spanish as a menu option (2)' },
+      { id:'D19', num:19, dir:'down', answer:'KAT', r:4, c:2, clue:'Kit-___ (3)' },
+      { id:'D20', num:20, dir:'down', answer:'IMAGES', r:4, c:3, clue:'Photos (6)' },
+      { id:'D23', num:23, dir:'down', answer:'EAT', r:4, c:15, clue:'Consume food (3)' },
+      { id:'D25', num:25, dir:'down', answer:'BOA', r:5, c:6, clue:'___ Constrictor (3)' },
+      { id:'D26', num:26, dir:'down', answer:'BOG', r:5, c:7, clue:'Swamp (3)' },
+      { id:'D28', num:28, dir:'down', answer:'THONG', r:5, c:10, clue:'Underwear, or a roommate (5)' },
+      { id:'D29', num:29, dir:'down', answer:'STAGES', r:6, c:0, clue:'Levels of bra (6)' },
+      { id:'D31', num:31, dir:'down', answer:'TNS', r:6, c:5, clue:'Tennessee abbrs. (3)' },
+      { id:'D33', num:33, dir:'down', answer:'EE', r:6, c:13, clue:'Repeated letters in see (2)' },
+      { id:'D34', num:34, dir:'down', answer:'ARUBA', r:6, c:14, clue:'Your most recent vacation (5)' },
+      { id:'D36', num:36, dir:'down', answer:'ATE', r:7, c:1, clue:'Consumed food (3)' },
+      { id:'D38', num:38, dir:'down', answer:'SE', r:7, c:9, clue:'Southeast, briefly (2)' },
+      { id:'D39', num:39, dir:'down', answer:'CROOK', r:7, c:11, clue:'Criminal, casually (5)' },
+      { id:'D41', num:41, dir:'down', answer:'HEAR', r:8, c:2, clue:'Listen to (4)' },
+      { id:'D42', num:42, dir:'down', answer:'NE', r:8, c:4, clue:'Element symbol for neon (2)' },
+      { id:'D43', num:43, dir:'down', answer:'GOLD', r:8, c:8, clue:'Medal above silver (4)' },
+      { id:'D45', num:45, dir:'down', answer:'SINE', r:8, c:15, clue:'Not cosine or tangent (4)' },
+      { id:'D47', num:47, dir:'down', answer:'HER', r:9, c:6, clue:'Belonging to that girl (3)' },
+      { id:'D48', num:48, dir:'down', answer:'BE', r:9, c:7, clue:'To __ or not to __ (2)' },
+      { id:'D52', num:52, dir:'down', answer:'SU', r:10, c:9, clue:'Sunday, briefly (2)' },
+    ];
+
+    const hiddenPath = [
+      [1,15], [1,5], [3,2], [4,10], [12,5],
+      [1,3], [1,7], [1,2], [2,9], [3,16], [5,1],
+      [12,5], [3,3], [5,13], [4,2], [2,1],
+      [2,8], [1,15], [3,5], [3,14], [1,11],
+      [1,9], [1,14], [1,4], [1,6], [9,15],
+      [2,6], [2,13], [4,1], [3,9]
+    ];
+
+    const grid = document.getElementById('grid');
+    const status = document.getElementById('status');
+    const directionBtn = document.getElementById('directionBtn');
+    const cells = [];
+    let direction = 'across';
+    let selected = null;
+    let solvedShown = false;
+
+    const numberMap = new Map();
+    entries.forEach(e => {
+      const key = `${e.r},${e.c}`;
+      if (!numberMap.has(key)) numberMap.set(key, e.num);
+      else if (!String(numberMap.get(key)).split('/').includes(String(e.num))) numberMap.set(key, numberMap.get(key) + '/' + e.num);
+    });
+
+    function coordsForEntry(entry) {
+      const coords = [];
+      for (let i = 0; i < entry.answer.length; i++) {
+        coords.push([entry.r + (entry.dir === 'down' ? i : 0), entry.c + (entry.dir === 'across' ? i : 0)]);
+      }
+      return coords;
+    }
+
+    function makeClues(targetId, dir) {
+      const target = document.getElementById(targetId);
+      target.innerHTML = '';
+      sortedEntries(dir).forEach(entry => {
+        const li = document.createElement('li');
+        li.id = entry.id;
+        li.dataset.entryId = entry.id;
+        li.innerHTML = `<span class="cluenum">${entry.num}.</span>${entry.clue}`;
+        li.addEventListener('click', () => {
+          direction = dir;
+          updateDirectionLabel();
+          focusCell(entry.r, entry.c, true);
+          highlightEntry(entry);
+        });
+        target.appendChild(li);
+      });
+    }
+
+    function buildGrid() {
+      grid.innerHTML = '';
+      rows.forEach((row, r) => {
+        cells[r] = [];
+        [...row].forEach((ch, c) => {
+          const div = document.createElement('div');
+          div.className = ch === '#' ? 'cell black' : 'cell';
+          const key = `${r},${c}`;
+          if (numberMap.has(key)) {
+            const num = document.createElement('span');
+            num.className = 'num';
+            num.textContent = numberMap.get(key);
+            div.appendChild(num);
+          }
+          if (ch !== '#') {
+            const input = document.createElement('input');
+            input.maxLength = 1;
+            input.autocomplete = 'off';
+            input.inputMode = 'text';
+            input.dataset.answer = ch;
+            input.dataset.r = r;
+            input.dataset.c = c;
+            input.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}`);
+            input.addEventListener('input', onInput);
+            input.addEventListener('keydown', onKeyDown);
+            input.addEventListener('focus', () => focusCell(r, c, false));
+            input.addEventListener('click', () => {
+              if (selected && selected.r === r && selected.c === c) toggleDirection();
+              focusCell(r, c, false);
+              input.select();
+            });
+            div.appendChild(input);
+            cells[r][c] = input;
+          }
+          grid.appendChild(div);
+        });
+      });
+      updateStatus();
+      updateDirectionLabel();
+    }
+
+    function onInput(e) {
+      const input = e.target;
+      input.value = input.value.toUpperCase().replace(/[^A-Z]/g, '').slice(-1);
+      mark(input);
+      updateStatus();
+      updateClueStatus();
+      if (input.value && input.classList.contains('ok')) moveNext(input);
+    }
+
+    function onKeyDown(e) {
+      const input = e.target;
+      const r = +input.dataset.r;
+      const c = +input.dataset.c;
+
+      if (/^[a-zA-Z]$/.test(e.key)) {
+        e.preventDefault();
+        input.value = e.key.toUpperCase();
+        mark(input);
+        updateStatus();
+        updateClueStatus();
+        if (input.classList.contains('ok')) moveNext(input);
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const entry = entryAtCell(r, c, direction);
+        if (entry) focusNextEntry(entry, direction);
+        else moveForward(r, c, direction);
+        return;
+      }
+
+      if (e.key === ' ' || e.key === 'Tab') {
+        e.preventDefault();
+        toggleDirection();
+        return;
+      }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (input.value) {
+          input.value = '';
+          mark(input);
+          updateStatus();
+          updateClueStatus();
+        } else {
+          moveStep(r, c, direction === 'across' ? 0 : -1, direction === 'across' ? -1 : 0);
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowRight') { e.preventDefault(); direction = 'across'; updateDirectionLabel(); moveStep(r, c, 0, 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); direction = 'across'; updateDirectionLabel(); moveStep(r, c, 0, -1); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); direction = 'down'; updateDirectionLabel(); moveStep(r, c, 1, 0); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); direction = 'down'; updateDirectionLabel(); moveStep(r, c, -1, 0); }
+    }
+
+    function moveNext(input) {
+      const r = +input.dataset.r;
+      const c = +input.dataset.c;
+      const entry = entryAtCell(r, c, direction);
+
+      if (!entry) {
+        moveForward(r, c, direction);
+        return;
+      }
+
+      const coords = coordsForEntry(entry);
+      const idx = coords.findIndex(([rr, cc]) => rr === r && cc === c);
+
+      if (idx >= 0 && idx < coords.length - 1) {
+        const [nr, nc] = coords[idx + 1];
+        focusCell(nr, nc, true);
+        return;
+      }
+
+      focusNextEntry(entry, direction);
+    }
+
+    function focusNextEntry(currentEntry, dir) {
+      const list = sortedEntries(dir);
+      const idx = list.findIndex(e => e.id === currentEntry.id);
+
+      if (idx >= 0 && idx < list.length - 1) {
+        const next = list[idx + 1];
+        direction = dir;
+        updateDirectionLabel();
+        focusCell(next.r, next.c, true);
+        return;
+      }
+
+      const nextDir = dir === 'across' ? 'down' : 'across';
+      const nextList = sortedEntries(nextDir);
+      const next = nextList[0];
+      if (next) {
+        direction = nextDir;
+        updateDirectionLabel();
+        focusCell(next.r, next.c, true);
+      }
+    }
+
+    function sortedEntries(dir) {
+      return entries
+        .filter(e => e.dir === dir)
+        .sort((a, b) => a.num - b.num || a.r - b.r || a.c - b.c);
+    }
+
+    function moveForward(r, c, dir) {
+      const entry = entryAtCell(r, c, dir);
+      if (entry) {
+        const coords = coordsForEntry(entry);
+        const idx = coords.findIndex(([rr, cc]) => rr === r && cc === c);
+        if (idx >= 0 && idx < coords.length - 1) {
+          const [nr, nc] = coords[idx + 1];
+          focusCell(nr, nc, true);
+          return;
+        }
+        focusNextEntry(entry, dir);
+        return;
+      }
+
+      const totalRows = rows.length;
+      const totalCols = rows[0].length;
+      let nr = r;
+      let nc = c;
+
+      for (let steps = 0; steps < totalRows * totalCols; steps++) {
+        if (dir === 'across') {
+          nc += 1;
+          if (nc >= totalCols) {
+            nc = 0;
+            nr = (nr + 1) % totalRows;
+          }
+        } else {
+          nr += 1;
+          if (nr >= totalRows) {
+            nr = 0;
+            nc = (nc + 1) % totalCols;
+          }
+        }
+
+        if (cells[nr] && cells[nr][nc]) {
+          focusCell(nr, nc, true);
+          return;
+        }
+      }
+    }
+
+    function moveBackward(r, c, dir) {
+      const totalRows = rows.length;
+      const totalCols = rows[0].length;
+      let nr = r;
+      let nc = c;
+
+      for (let steps = 0; steps < totalRows * totalCols; steps++) {
+        if (dir === 'across') {
+          nc -= 1;
+          if (nc < 0) {
+            nc = totalCols - 1;
+            nr = (nr - 1 + totalRows) % totalRows;
+          }
+        } else {
+          nr -= 1;
+          if (nr < 0) {
+            nr = totalRows - 1;
+            nc = (nc - 1 + totalCols) % totalCols;
+          }
+        }
+
+        if (cells[nr] && cells[nr][nc]) {
+          focusCell(nr, nc, true);
+          return;
+        }
+      }
+    }
+
+    function moveStep(r, c, dr, dc) {
+      let nr = r + dr;
+      let nc = c + dc;
+      while (nr >= 0 && nr < rows.length && nc >= 0 && nc < rows[0].length) {
+        if (cells[nr] && cells[nr][nc]) {
+          focusCell(nr, nc, true);
+          return;
+        }
+        nr += dr;
+        nc += dc;
+      }
+
+      if (dr === 0 && dc === 1) moveForward(r, c, 'across');
+      else if (dr === 0 && dc === -1) moveBackward(r, c, 'across');
+      else if (dr === 1 && dc === 0) moveForward(r, c, 'down');
+      else if (dr === -1 && dc === 0) moveBackward(r, c, 'down');
+    }
+
+    function focusCell(r, c, shouldFocus) {
+      document.querySelectorAll('.cell.active,.cell.inword').forEach(el => el.classList.remove('active', 'inword'));
+      selected = { r, c };
+      const input = cells[r]?.[c];
+      if (!input) return;
+      input.parentElement.classList.add('active');
+      const entry = entryAtCell(r, c, direction);
+      if (entry) {
+        highlightEntry(entry);
+        updateCurrentClue(entry);
+      } else {
+        updateCurrentClue(null);
+      }
+      if (shouldFocus) { input.focus(); input.select(); }
+    }
+
+    function updateCurrentClue(entry) {
+      document.querySelectorAll('li.current').forEach(li => li.classList.remove('current'));
+      if (!entry) return;
+      const li = document.getElementById(entry.id);
+      if (li) {
+        li.classList.add('current');
+        li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+
+    function highlightEntry(entry) {
+      coordsForEntry(entry).forEach(([r,c]) => cells[r]?.[c]?.parentElement.classList.add('inword'));
+      cells[selected?.r]?.[selected?.c]?.parentElement.classList.add('active');
+    }
+
+    function entryAtCell(r, c, dir) {
+      const matches = entries.filter(e => e.dir === dir && coordsForEntry(e).some(([rr,cc]) => rr === r && cc === c));
+      return matches[0] || null;
+    }
+
+    function toggleDirection() {
+      direction = direction === 'across' ? 'down' : 'across';
+      updateDirectionLabel();
+      if (selected) focusCell(selected.r, selected.c, false);
+    }
+
+    function updateDirectionLabel() {
+      const label = direction === 'across' ? 'Across' : 'Down';
+      directionBtn.textContent = `SPACE BAR: ${label}`;
+      directionBtn.setAttribute('aria-label', `Space bar: switch direction. Current direction: ${label}`);
+    }
+
+    function mark(input) {
+      const parent = input.parentElement;
+      parent.classList.remove('correct', 'wrong');
+      input.classList.remove('ok');
+      if (!input.value) return;
+      if (input.value === input.dataset.answer) {
+        parent.classList.add('correct');
+        input.classList.add('ok');
+      } else {
+        parent.classList.add('wrong');
+      }
+    }
+
+    function allInputs() {
+      return Array.from(document.querySelectorAll('.cell input'));
+    }
+
+    function entrySolved(entry) {
+      return coordsForEntry(entry).every(([r,c], i) => cells[r]?.[c]?.value === entry.answer[i]);
+    }
+
+    function updateClueStatus() {
+      entries.forEach(entry => {
+        const li = document.getElementById(entry.id);
+        if (li) li.classList.toggle('solved', entrySolved(entry));
+      });
+    }
+
+    function updateStatus() {
+      const inputs = allInputs();
+      let correct = 0;
+      inputs.forEach(input => {
+        if (input.value === input.dataset.answer) correct++;
+      });
+      status.textContent = `${correct} / ${inputs.length} letters correct`;
+      if (inputs.length && correct === inputs.length && !solvedShown) reveal();
+    }
+
+    function reveal() {
+      solvedShown = true;
+      hiddenPath.forEach(([r,c]) => {
+        const input = cells[r-1]?.[c-1];
+        if (input) input.parentElement.classList.add('highlighted');
+      });
+      updateClueStatus();
+      document.getElementById('doneDialog').showModal();
+    }
+
+    document.getElementById('checkBtn').addEventListener('click', () => {
+      allInputs().forEach(mark);
+      updateStatus();
+      updateClueStatus();
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      solvedShown = false;
+      allInputs().forEach(input => {
+        input.value = '';
+        input.parentElement.classList.remove('correct', 'wrong', 'highlighted', 'active', 'inword');
+        input.classList.remove('ok');
+      });
+      document.querySelectorAll('li.solved').forEach(li => li.classList.remove('solved'));
+      document.querySelectorAll('li.current').forEach(li => li.classList.remove('current'));
+      updateStatus();
+      cells[0][0]?.focus();
+    });
+
+    directionBtn.addEventListener('click', () => toggleDirection());
+    document.getElementById('closeDialog').addEventListener('click', () => document.getElementById('doneDialog').close());
+
+    makeClues('acrossClues', 'across');
+    makeClues('downClues', 'down');
+    buildGrid();
+  </script>
+</body>
+</html>
